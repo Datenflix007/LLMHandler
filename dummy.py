@@ -1,3 +1,4 @@
+# dummy.py
 #!/usr/bin/env python
 """
 Einfaches Test‑Skript für die LLMHandler‑Klasse.
@@ -8,6 +9,8 @@ Der Benutzer kann entscheiden:
 * Welcher Prompt gesendet werden soll (oder ein Prompt aus einer Datei).
 * Optionalen Pfad zu einer oder mehreren Dateien (Text‑ oder Bild‑Dateien),
   die dem Prompt hinzugefügt werden.
+* Länge der Antwort (maximale Tokenanzahl oder 0 = unbegrenzt).
+* Ausgabe‑Datei (wird die Antwort dort gespeichert).
 
 Beispielaufrufe:
 
@@ -18,10 +21,10 @@ Beispielaufrufe:
     python dummy.py -m openai -f prompt.txt
 
     # 3️⃣ Prompt + Bild, Gemini
-    python dummy.py -m gemini -p "Was ist die Relativität?" -f image.png
+    python dummy.py -m gemini -p "Was ist die Relativität?" -F image.png
 
-Der Code verwendet standardmäßig die Umgebungsvariablen aus einer .env‑Datei
-(OPENAI_API_KEY, GEMINI_API_KEY, OLLAMA_HOST, OLLAMA_MODEL usw.).
+    # 4️⃣ Prompt + Datei + Ausgabe‑Datei + max. 200 Tokens
+    python dummy.py -m ollama -p "Was ist..." -F docs.txt -l 200 -O out.txt
 """
 
 import argparse
@@ -86,11 +89,11 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "-n",
-        "--max-tokens",
+        "-l",
+        "--length",
         type=int,
         default=None,
-        help="Maximale Token‑Anzahl bei Ollama.",
+        help="Maximale Token‑Anzahl (0 = unbegrenzt).",
     )
 
     parser.add_argument(
@@ -98,6 +101,13 @@ def _parse_args() -> argparse.Namespace:
         "--stream",
         action="store_true",
         help="Antwort in Stream‑Modus zurückgeben (nur bei Ollama/Gemini).",
+    )
+
+    parser.add_argument(
+        "-O",
+        "--output",
+        type=Path,
+        help="Pfad, unter dem die Antwort gespeichert werden soll.",
     )
 
     return parser.parse_args()
@@ -115,14 +125,29 @@ def main() -> None:
     # Initialisiere den Handler
     handler = LLMHandler(args.model)
 
-    print(f"\n=== LLM: {args.model.upper()} ===")
+    # Schöne Rahmen‑Anzeige
+    sep = "=" * 70
+    print(sep)
+    print(f"  LLM Test Harness – {args.model.upper()}")
+    print(sep)
+    print(f"Prompt: {prompt[:60]}{'...' if len(prompt) > 60 else ''}")
+    if files:
+        print(f"Zusätzliche Dateien: {', '.join(str(f) for f in files)}")
+    print(f"Temperatur: {args.temperature}")
+    print(f"Max. Tokens: {args.length if args.length and args.length > 0 else 'unbegrenzt'}")
+    print(f"Stream‑Modus: {args.stream}")
+    if args.output:
+        print(f"Ausgabe‑Datei: {args.output}")
+    print(sep)
+
     try:
         answer = handler.get_answer(
             prompt,
             files=files,
             temperature=args.temperature,
-            max_tokens=args.max_tokens,
+            length=args.length,
             stream=args.stream,
+            output_path=args.output,
         )
         print("\n--- Antwort ---")
         print(answer)

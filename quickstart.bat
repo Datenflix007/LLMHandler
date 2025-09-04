@@ -21,15 +21,12 @@ if not exist ".venv\" (
     call .venv\Scripts\activate.bat
 )
 
-REM LLMHandler starten
+
+REM ----------------------------------------------
+REM 3️⃣ Demo‑Aufruf
+REM ----------------------------------------------
 echo 🚀 Starte LLMHandler...
+python dummy.py -m ollama -p "Schreibe mir einen kleinen Aufsatz über die Zirkusparteien von Konstantinopel. Schreibe so in die Datei, sodass die Datei in Microsoft Word ausführbar und normal nutzbar ist. Formalia: Blocksatz, Schrift New Roman und Schriftgröße 12." -l 100000000 -O output\Aufsatz.docx
+REM python dummy.py -m ollama -p "Programmiere die Aufgabe" -F input/prompt.txt -l 1000 -O output\index.html
 
-python dummy.py -m ollama -p "Erzähl mir einen mittelalterlichen Witz"
-
-echo
-echo =============================
-
-python dummy.py -m ollama -f input/prompt.txt 
-
-endlocal
 pause

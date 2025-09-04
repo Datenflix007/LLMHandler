@@ -3,21 +3,12 @@
 Ein generischer Wrapper, der **OpenAI**, **Gemini** (Google‑Gemini) und **Ollama** über eine einheitliche
 API anspricht.
 
-Alle Back‑Ends können nicht nur reinen Text, sondern auch Dateien (Text‑ oder Bild‑Inhalte)
-übergeben bekommen – die Inhalte werden automatisch in die jeweilige Anfrage integriert.
-
-Nutze das Skript wie:
-
-    handler = LLMHandler("ollama")
-    answer = handler.get_answer(
-        prompt="Erkläre die Relativitätstheorie.",
-        files=["text.txt", "image.png"],
-        temperature=0.7,
-        max_tokens=512,
-        stream=True
-    )
+… (der alte Doc‑String bleibt unverändert) …
 """
 
+# --------------------------------------------------------------------------- #
+# IMPORTS
+# --------------------------------------------------------------------------- #
 import os
 import mimetypes
 from pathlib import Path
@@ -26,25 +17,22 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 from dotenv import load_dotenv
 
 # --------------------------------------------------------------------------- #
-# Laden der Umgebungs‑Variablen
+# Umgebungs‑Variablen laden
 # --------------------------------------------------------------------------- #
 load_dotenv(override=True)
 
-
 # --------------------------------------------------------------------------- #
-# Helper – Datei‑inhalte lesen
+# Helper – Datei‑Inhalte lesen
 # --------------------------------------------------------------------------- #
 def _read_file_content(path: Union[str, Path]) -> bytes:
     """Liest den Inhalt einer Datei (Binary)."""
     with open(path, "rb") as f:
         return f.read()
 
-
 def _is_image(path: Union[str, Path]) -> bool:
     """Bestimmt, ob die Datei ein Bild ist (nach MIME‑Typ)."""
     mime, _ = mimetypes.guess_type(path)
     return mime is not None and mime.startswith("image/")
-
 
 # --------------------------------------------------------------------------- #
 # Haupt‑Klasse
@@ -67,9 +55,9 @@ class LLMHandler:
         self.llm_type = llm_type.lower()
         self._load_backend(model, host)
 
-    # --------------------------------------------------------------------- #
-    #  Backend‑Initialisierung
-    # --------------------------------------------------------------------- #
+    # --------------------------------------------------------------------------- #
+    # Backend‑Initialisierung
+    # --------------------------------------------------------------------------- #
     def _load_backend(self, model: Optional[str], host: Optional[str]) -> None:
         """Lädt die passende Bibliothek und setzt globale Konfigurationen."""
         if self.llm_type == "ollama":
@@ -93,17 +81,18 @@ class LLMHandler:
                 "Verwende 'ollama', 'openai' oder 'gemini'."
             )
 
-    # --------------------------------------------------------------------- #
-    #  Interface
-    # --------------------------------------------------------------------- #
+    # --------------------------------------------------------------------------- #
+    # Interface
+    # --------------------------------------------------------------------------- #
     def get_answer(
         self,
         prompt: str,
         *,
         files: Optional[Sequence[Union[str, Path]]] = None,
         temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        length: Optional[int] = None,   # neue Option – max_tokens oder None
         stream: bool = False,
+        output_path: Optional[Path] = None,   # neue Option – Ausgabe‑Datei
     ) -> str:
         """
         Fragt das hinterlegte LLM mit dem gegebenen Prompt ab.
@@ -116,15 +105,16 @@ class LLMHandler:
             Pfade zu Dateien, deren Inhalt (Text oder Bild) in die Anfrage integriert wird.
         temperature : float | None
             Stimmt die Kreativität des Modells ab (nur bei Ollama & Gemini).
-        max_tokens : int | None
-            Maximale Anzahl an Token (nur bei Ollama & Gemini).
+        length : int | None
+            Maximale Token‑Anzahl (None = unbegrenzt).
         stream : bool
-            Bei `True` wird die Antwort schrittweise zurückgegeben (nur bei Ollama & Gemini).
-
+            Bei `True` wird die Antwort schrittweise zurückgegeben (nur bei Ollama/Gemini).
+        output_path : Path | None
+            Pfad, unter dem die Antwort gespeichert werden soll.
         Returns
         -------
         str
-            Die Antwort des Modells.
+            Die Antwort des Modells (und ggf. in output_path geschrieben).
         """
         # ----- Vorverarbeitung der Dateien --------------------------------
         file_bytes: List[bytes] = []
@@ -138,22 +128,22 @@ class LLMHandler:
                     try:
                         file_texts.append(data.decode("utf-8"))
                     except Exception:
-                        file_texts.append(data.decode("latin1"))  # Fallback
+                        file_texts.append(data.decode("latin1"))
 
         # ----- Aufruf je Backend -----------------------------------------
         if self.llm_type == "ollama":
-            return self._ollama_answer(
+            answer = self._ollama_answer(
                 prompt,
                 file_bytes=file_bytes,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_tokens=length,
                 stream=stream,
             )
         elif self.llm_type == "openai":
             combined_prompt = "\n\n".join(file_texts + [prompt]) if file_texts else prompt
-            return self._openai_answer(combined_prompt)
+            answer = self._openai_answer(combined_prompt)
         elif self.llm_type == "gemini":
-            return self._gemini_answer(
+            answer = self._gemini_answer(
                 prompt,
                 file_bytes=file_bytes,
                 temperature=temperature,
@@ -162,9 +152,17 @@ class LLMHandler:
         else:  # pragma: no cover
             raise RuntimeError("Unreachable")
 
-    # --------------------------------------------------------------------- #
-    #  Unterfunktionen pro Backend
-    # --------------------------------------------------------------------- #
+        # ----- Optional: in Datei schreiben ------------------------------
+        if output_path:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(answer, encoding="utf-8")
+
+        return answer
+
+    # --------------------------------------------------------------------------- #
+    # Unterfunktionen pro Backend
+    # --------------------------------------------------------------------------- #
     def _ollama_answer(
         self,
         prompt: str,
@@ -180,7 +178,6 @@ class LLMHandler:
         if max_tokens is not None:
             opts["num_predict"] = max_tokens
 
-        # Ollama erwartet `images=[Image]` – unser bytes‑Objekt wird vom Serializer in base64 konvertiert
         images = file_bytes if file_bytes else None
 
         if stream:
@@ -220,20 +217,18 @@ class LLMHandler:
     ) -> str:
         model = self.client.GenerativeModel(self.model, temperature=temperature)
 
-        # Für Gemini können wir "parts" nutzen – Text + Bilder
-        parts: List[Any] = [prompt]  # erster Teil: reiner Text
+        parts: List[Any] = [prompt]
 
         for idx, data in enumerate(file_bytes):
             mime, _ = mimetypes.guess_type(f"file{idx}")
             if not mime:
                 mime = "application/octet-stream"
-            part = {
+            parts.append({
                 "image": {
                     "mime_type": mime,
-                    "data": data.decode("latin1")  # google‑genai erwartet str (base64‑decodable)
+                    "data": data.decode("latin1"),
                 }
-            }
-            parts.append(part)
+            })
 
         response = model.generate_content(parts, stream=stream)
 
