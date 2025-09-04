@@ -17,7 +17,7 @@ if not exist ".venv\" (
     )
 ) else (
     REM venv aktivieren
-    echo "Aktiviere VNEV"
+    echo "Aktiviere VENV"
     call .venv\Scripts\activate.bat
 )
 
