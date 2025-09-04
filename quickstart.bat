@@ -23,9 +23,13 @@ if not exist ".venv\" (
 
 REM LLMHandler starten
 echo 🚀 Starte LLMHandler...
-ollama serve
 
-python dummy.py
+python dummy.py -m ollama -p "Erzähl mir einen mittelalterlichen Witz"
+
+echo
+echo =============================
+
+python dummy.py -m ollama -f input/prompt.txt 
 
 endlocal
 pause

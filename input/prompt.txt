@@ -1,0 +1,1 @@
+Erstelle mir HTML Code, der einen OSM Karte einbettet. Auf der Karte sollen auf Koordinaten bikder und geometrische figuren angepinnt werden.
